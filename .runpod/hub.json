@@ -1,0 +1,18 @@
+{
+    "title": "upscale_interpolation_Runpod_hub",
+    "description": "upscale and interpolation video",
+    "type": "serverless",
+    "category": "video",
+    "iconUrl": "https://example.com/icon.png",
+  
+    "config": {
+      "runsOn": "GPU",
+      "containerDiskInGb": 10,
+  
+      "gpuCount": 1,
+      "gpuIds": "ADA_24",
+      "allowedCudaVersions": [
+        "12.9", "12.8"
+      ]
+    }
+}
