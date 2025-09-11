@@ -156,7 +156,7 @@ This project is based on the following original repositories. All rights to the 
 
 *   **ComfyUI:** [https://github.com/comfyanonymous/ComfyUI](https://github.com/comfyanonymous/ComfyUI)
 *   **ComfyUI-Frame-Interpolation:** [https://github.com/Fannovel16/ComfyUI-Frame-Interpolation](https://github.com/Fannovel16/ComfyUI-Frame-Interpolation)
-*   **VHS (Video Helper Suite):** [https://github.com/wlsdml1114/ComfyUI-VideoHelperSuite](https://github.com/wlsdml1114/ComfyUI-VideoHelperSuite)
+*   **VHS (Video Helper Suite):** [https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite](https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite)
 
 ## 📄 License
 

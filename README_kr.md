@@ -156,7 +156,7 @@ Base64 인코딩된 파일을 직접 전송하는 대신 RunPod의 네트워크 
 
 *   **ComfyUI:** [https://github.com/comfyanonymous/ComfyUI](https://github.com/comfyanonymous/ComfyUI)
 *   **ComfyUI-Frame-Interpolation:** [https://github.com/Fannovel16/ComfyUI-Frame-Interpolation](https://github.com/Fannovel16/ComfyUI-Frame-Interpolation)
-*   **VHS (Video Helper Suite):** [https://github.com/wlsdml1114/ComfyUI-VideoHelperSuite](https://github.com/wlsdml1114/ComfyUI-VideoHelperSuite)
+*   **VHS (Video Helper Suite):** [https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite](https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite)
 
 ## 📄 라이선스
 
