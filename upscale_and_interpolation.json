@@ -1,0 +1,138 @@
+{
+  "1": {
+    "inputs": {
+      "per_batch": 1,
+      "upscale_model": [
+        "5",
+        0
+      ],
+      "images": [
+        "8",
+        0
+      ]
+    },
+    "class_type": "ImageUpscaleWithModelBatched",
+    "_meta": {
+      "title": "Image Upscale With Model Batched"
+    }
+  },
+  "2": {
+    "inputs": {
+      "split_index": 1,
+      "images": [
+        "1",
+        0
+      ]
+    },
+    "class_type": "VHS_SplitImages",
+    "_meta": {
+      "title": "Split Images 🎥🅥🅗🅢"
+    }
+  },
+  "5": {
+    "inputs": {
+      "model_name": "2x-AnimeSharpV4_Fast_RCAN_PU.safetensors"
+    },
+    "class_type": "UpscaleModelLoader",
+    "_meta": {
+      "title": "업스케일 모델 로드"
+    }
+  },
+  "6": {
+    "inputs": {
+      "ckpt_name": "rife49.pth",
+      "clear_cache_after_n_frames": 88,
+      "multiplier": 2,
+      "fast_mode": true,
+      "ensemble": true,
+      "scale_factor": 4,
+      "frames": [
+        "2",
+        2
+      ]
+    },
+    "class_type": "RIFE VFI",
+    "_meta": {
+      "title": "RIFE VFI (recommend rife47 and rife49)"
+    }
+  },
+  "8": {
+    "inputs": {
+      "video": "wan22_result_6hoek8kzu8r.mp4",
+      "force_rate": 0,
+      "custom_width": 0,
+      "custom_height": 0,
+      "frame_load_cap": 0,
+      "skip_first_frames": 0,
+      "select_every_nth": 1,
+      "format": "AnimateDiff"
+    },
+    "class_type": "VHS_LoadVideo",
+    "_meta": {
+      "title": "Load Video (Upload) 🎥🅥🅗🅢"
+    }
+  },
+  "9": {
+    "inputs": {
+      "frame_rate": [
+        "15",
+        1
+      ],
+      "loop_count": 0,
+      "filename_prefix": "25-09-12/wan/25-09-12-FASTWAN",
+      "format": "video/h264-mp4",
+      "pix_fmt": "yuv420p",
+      "crf": 15,
+      "save_metadata": true,
+      "trim_to_audio": true,
+      "pingpong": false,
+      "save_output": true,
+      "images": [
+        "6",
+        0
+      ]
+    },
+    "class_type": "VHS_VideoCombine",
+    "_meta": {
+      "title": "Video Combine 🎥🅥🅗🅢"
+    }
+  },
+  "12": {
+    "inputs": {
+      "video_info": [
+        "8",
+        3
+      ]
+    },
+    "class_type": "VHS_VideoInfo",
+    "_meta": {
+      "title": "Video Info 🎥🅥🅗🅢"
+    }
+  },
+  "15": {
+    "inputs": {
+      "operator": "*",
+      "a": [
+        "12",
+        0
+      ],
+      "b": [
+        "16",
+        0
+      ]
+    },
+    "class_type": "LayerUtility: NumberCalculator",
+    "_meta": {
+      "title": "LayerUtility: 숫자 계산기"
+    }
+  },
+  "16": {
+    "inputs": {
+      "value": 2
+    },
+    "class_type": "PrimitiveInt",
+    "_meta": {
+      "title": "정수"
+    }
+  }
+}
