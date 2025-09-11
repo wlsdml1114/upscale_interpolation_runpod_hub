@@ -126,6 +126,35 @@ def get_images(ws, prompt):
 
     return output_images
 
+    
+def get_videos(ws, prompt):
+    prompt_id = queue_prompt(prompt)['prompt_id']
+    output_videos = {}
+    while True:
+        out = ws.recv()
+        if isinstance(out, str):
+            message = json.loads(out)
+            if message['type'] == 'executing':
+                data = message['data']
+                if data['node'] is None and data['prompt_id'] == prompt_id:
+                    break
+        else:
+            continue
+
+    history = get_history(prompt_id)[prompt_id]
+    for node_id in history['outputs']:
+        node_output = history['outputs'][node_id]
+        videos_output = []
+        if 'gifs' in node_output:
+            for video in node_output['gifs']:
+                # fullpath를 이용하여 직접 파일을 읽고 base64로 인코딩
+                with open(video['fullpath'], 'rb') as f:
+                    video_data = base64.b64encode(f.read()).decode('utf-8')
+                videos_output.append(video_data)
+        output_videos[node_id] = videos_output
+
+    return output_videos
+
 def load_workflow(workflow_path):
     with open(workflow_path, 'r') as file:
         return json.load(file)
@@ -139,15 +168,26 @@ def handler(job):
     # 작업 타입 확인
     task_type = job_input.get("task_type", "upscale")
     
-    # 비디오 입력 처리
-    video_input = job_input.get("video_path")
+    # 비디오 입력 처리 (video_path, video_url, video_base64 중 하나)
+    video_input = job_input.get("video_path") or job_input.get("video_url") or job_input.get("video_base64")
     if not video_input:
-        return {"error": "비디오 경로가 필요합니다."}
+        return {"error": "비디오 입력이 필요합니다. (video_path, video_url, video_base64 중 하나)"}
     
-    # 비디오 파일 경로 확보 (Base64 또는 파일 경로)
+    # 비디오 파일 경로 확보
     if video_input == "/example_video.mp4":
         video_path = "/example_video.mp4"
+    elif job_input.get("video_url"):
+        # URL인 경우 다운로드
+        try:
+            import urllib.request
+            video_path = os.path.join(task_id, "input_video.mp4")
+            os.makedirs(task_id, exist_ok=True)
+            urllib.request.urlretrieve(video_input, video_path)
+            logger.info(f"비디오 URL에서 다운로드 완료: {video_input}")
+        except Exception as e:
+            return {"error": f"비디오 URL 다운로드 실패: {e}"}
     else:
+        # Base64 또는 파일 경로
         video_path = save_data_if_base64(video_input, task_id, "input_video.mp4")
     
     # workflow 로드 및 설정
@@ -199,27 +239,15 @@ def handler(job):
                 raise Exception("웹소켓 연결 시간 초과 (3분)")
             time.sleep(5)
     
-    images = get_images(ws, prompt)
+    videos = get_videos(ws, prompt)
     ws.close()
 
+    
     # 이미지가 없는 경우 처리
-    if not images:
-        return {"error": "이미지를 생성할 수 없습니다."}
+    for node_id in videos:
+        if videos[node_id]:
+            return {"video": videos[node_id][0]}
     
-    # 결과 반환
-    result = {
-        "task_type": task_type,
-        "videos": []
-    }
-    
-    # 모든 생성된 비디오 수집
-    for node_id in images:
-        if images[node_id]:
-            result["videos"].extend(images[node_id])
-    
-    if not result["videos"]:
-        return {"error": "비디오를 찾을 수 없습니다."}
-    
-    return result
+    return {"error": "비디오를를 찾을 수 없습니다."}
 
 runpod.serverless.start({"handler": handler})
