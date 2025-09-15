@@ -44,35 +44,6 @@ except Exception as e:
 
 server_address = os.getenv('SERVER_ADDRESS', '127.0.0.1')
 client_id = str(uuid.uuid4())
-def save_data_if_base64(data_input, temp_dir, output_filename):
-    """
-    입력 데이터가 Base64 문자열인지 확인하고, 맞다면 파일로 저장 후 경로를 반환합니다.
-    만약 일반 경로 문자열이라면 그대로 반환합니다.
-    """
-    # 입력값이 문자열이 아니면 그대로 반환
-    if not isinstance(data_input, str):
-        return data_input
-
-    try:
-        # Base64 문자열은 디코딩을 시도하면 성공합니다.
-        decoded_data = base64.b64decode(data_input)
-        
-        # 디렉토리가 존재하지 않으면 생성
-        os.makedirs(temp_dir, exist_ok=True)
-        
-        # 디코딩에 성공하면, 임시 파일로 저장합니다.
-        file_path = os.path.abspath(os.path.join(temp_dir, output_filename))
-        with open(file_path, 'wb') as f: # 바이너리 쓰기 모드('wb')로 저장
-            f.write(decoded_data)
-        
-        # 저장된 파일의 경로를 반환합니다.
-        print(f"✅ Base64 입력을 '{file_path}' 파일로 저장했습니다.")
-        return file_path
-
-    except (binascii.Error, ValueError):
-        # 디코딩에 실패하면, 일반 경로로 간주하고 원래 값을 그대로 반환합니다.
-        print(f"➡️ '{data_input}'은(는) 파일 경로로 처리합니다.")
-        return data_input
     
 def queue_prompt(prompt):
     url = f"http://{server_address}:8188/prompt"
@@ -169,26 +140,41 @@ def handler(job):
     task_type = job_input.get("task_type", "upscale")
     
     # 비디오 입력 처리 (video_path, video_url, video_base64 중 하나)
-    video_input = job_input.get("video_path") or job_input.get("video_url") or job_input.get("video_base64")
-    if not video_input:
+    video_path_input = job_input.get("video_path")
+    video_url_input = job_input.get("video_url")
+    video_base64_input = job_input.get("video_base64")
+    
+    if not (video_path_input or video_url_input or video_base64_input):
         return {"error": "비디오 입력이 필요합니다. (video_path, video_url, video_base64 중 하나)"}
     
     # 비디오 파일 경로 확보
-    if video_input == "/example_video.mp4":
-        video_path = "/example_video.mp4"
-    elif job_input.get("video_url"):
+    if video_path_input:
+        # 파일 경로인 경우
+        if video_path_input == "/example_video.mp4":
+            video_path = "/example_video.mp4"
+        else:
+            video_path = video_path_input
+    elif video_url_input:
         # URL인 경우 다운로드
         try:
             import urllib.request
             video_path = os.path.join(task_id, "input_video.mp4")
             os.makedirs(task_id, exist_ok=True)
-            urllib.request.urlretrieve(video_input, video_path)
-            logger.info(f"비디오 URL에서 다운로드 완료: {video_input}")
+            urllib.request.urlretrieve(video_url_input, video_path)
+            logger.info(f"비디오 URL에서 다운로드 완료: {video_url_input}")
         except Exception as e:
             return {"error": f"비디오 URL 다운로드 실패: {e}"}
-    else:
-        # Base64 또는 파일 경로
-        video_path = save_data_if_base64(video_input, task_id, "input_video.mp4")
+    elif video_base64_input:
+        # Base64인 경우 디코딩하여 저장
+        try:
+            os.makedirs(task_id, exist_ok=True)
+            video_path = os.path.join(task_id, "input_video.mp4")
+            decoded_data = base64.b64decode(video_base64_input)
+            with open(video_path, 'wb') as f:
+                f.write(decoded_data)
+            logger.info(f"Base64 비디오를 '{video_path}' 파일로 저장했습니다.")
+        except Exception as e:
+            return {"error": f"Base64 비디오 디코딩 실패: {e}"}
     
     # workflow 로드 및 설정
     if task_type == "upscale":
