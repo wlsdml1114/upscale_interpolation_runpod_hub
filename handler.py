@@ -98,9 +98,8 @@ def get_images(ws, prompt):
     return output_images
 
     
-def get_videos(ws, prompt):
+def get_video_path(ws, prompt):
     prompt_id = queue_prompt(prompt)['prompt_id']
-    output_videos = {}
     while True:
         out = ws.recv()
         if isinstance(out, str):
@@ -115,16 +114,12 @@ def get_videos(ws, prompt):
     history = get_history(prompt_id)[prompt_id]
     for node_id in history['outputs']:
         node_output = history['outputs'][node_id]
-        videos_output = []
         if 'gifs' in node_output:
             for video in node_output['gifs']:
-                # fullpath를 이용하여 직접 파일을 읽고 base64로 인코딩
-                with open(video['fullpath'], 'rb') as f:
-                    video_data = base64.b64encode(f.read()).decode('utf-8')
-                videos_output.append(video_data)
-        output_videos[node_id] = videos_output
-
-    return output_videos
+                # 첫 번째 비디오 파일 경로 반환
+                return video['fullpath']
+    
+    return None
 
 def load_workflow(workflow_path):
     with open(workflow_path, 'r') as file:
@@ -225,15 +220,44 @@ def handler(job):
                 raise Exception("웹소켓 연결 시간 초과 (3분)")
             time.sleep(5)
     
-    videos = get_videos(ws, prompt)
+    video_path = get_video_path(ws, prompt)
     ws.close()
 
+    # 비디오가 없는 경우 처리
+    if not video_path:
+        return {"error": "비디오를 생성할 수 없습니다."}
     
-    # 이미지가 없는 경우 처리
-    for node_id in videos:
-        if videos[node_id]:
-            return {"video": videos[node_id][0]}
+    # network_volume 파라미터 확인
+    use_network_volume = job_input.get("network_volume", False)
     
-    return {"error": "비디오를를 찾을 수 없습니다."}
+    if use_network_volume:
+        # 네트워크 볼륨 사용: 파일 경로 반환
+        try:
+            # 결과 비디오 파일 경로 생성
+            output_filename = f"{task_type}_{task_id}.mp4"
+            output_path = f"/runpod-volume/{output_filename}"
+            
+            # 원본 파일을 결과 경로로 복사
+            import shutil
+            shutil.copy2(video_path, output_path)
+            
+            logger.info(f"결과 비디오를 '{output_path}'에 저장했습니다.")
+            return {"video_path": output_path}
+            
+        except Exception as e:
+            logger.error(f"비디오 저장 실패: {e}")
+            return {"error": f"비디오 저장 실패: {e}"}
+    else:
+        # 네트워크 볼륨 미사용: Base64 인코딩하여 반환
+        try:
+            with open(video_path, 'rb') as f:
+                video_data = base64.b64encode(f.read()).decode('utf-8')
+            
+            logger.info("비디오를 Base64로 인코딩하여 반환했습니다.")
+            return {"video": video_data}
+            
+        except Exception as e:
+            logger.error(f"비디오 Base64 인코딩 실패: {e}")
+            return {"error": f"비디오 인코딩 실패: {e}"}
 
 runpod.serverless.start({"handler": handler})

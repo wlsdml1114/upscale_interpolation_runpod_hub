@@ -45,6 +45,7 @@ The `input` object must contain the following fields. Videos can be input using 
 | Parameter | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
 | `task_type` | `string` | No | `"upscale"` | Task type: `"upscale"` (upscaling only) or `"upscale_and_interpolation"` (upscaling + frame interpolation) |
+| `network_volume` | `boolean` | No | `false` | Whether to use network volume for output. If `true`, returns file path; if `false`, returns Base64 encoded data |
 
 #### Video Input (use only one)
 | Parameter | Type | Required | Default | Description |
@@ -85,17 +86,40 @@ The `input` object must contain the following fields. Videos can be input using 
 }
 ```
 
+#### 4. Using Network Volume (File Path Output)
+```json
+{
+  "input": {
+    "task_type": "upscale_and_interpolation",
+    "video_path": "/my_volume/input_video.mp4",
+    "network_volume": true
+  }
+}
+```
+
 ### Output
 
 #### Success
 
-If the job is successful, it returns a JSON object with the generated video Base64 encoded.
+If the job is successful, it returns a JSON object. The response format depends on the `network_volume` parameter.
+
+**When `network_volume: true`:**
+
+| Parameter | Type | Description |
+| --- | --- | --- |
+| `video_path` | `string` | Path to the generated video file |
+
+```json
+{
+  "video_path": "/runpod-volume/upscale_e5f6c1c3-e784-4e90-96a7-32f0be222d3c.mp4"
+}
+```
+
+**When `network_volume: false` (default):**
 
 | Parameter | Type | Description |
 | --- | --- | --- |
 | `video` | `string` | Base64 encoded video file data |
-
-**Success Response Example:**
 
 ```json
 {

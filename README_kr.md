@@ -45,6 +45,7 @@
 | 파라미터 | 타입 | 필수 | 기본값 | 설명 |
 | --- | --- | --- | --- | --- |
 | `task_type` | `string` | 아니오 | `"upscale"` | 작업 타입: `"upscale"` (업스케일링만) 또는 `"upscale_and_interpolation"` (업스케일링 + 프레임 보간) |
+| `network_volume` | `boolean` | 아니오 | `false` | 네트워크 볼륨 사용 여부. `true`이면 파일 경로 반환, `false`이면 Base64 인코딩된 데이터 반환 |
 
 #### 비디오 입력 (하나만 사용)
 | 파라미터 | 타입 | 필수 | 기본값 | 설명 |
@@ -89,13 +90,25 @@
 
 #### 성공
 
-작업이 성공하면 생성된 비디오의 Base64 인코딩된 JSON 객체를 반환합니다.
+작업이 성공하면 JSON 객체를 반환합니다. 응답 형식은 `network_volume` 파라미터에 따라 달라집니다.
+
+**`network_volume: true`인 경우:**
+
+| 파라미터 | 타입 | 설명 |
+| --- | --- | --- |
+| `video_path` | `string` | 생성된 비디오 파일의 경로 |
+
+```json
+{
+  "video_path": "/runpod-volume/upscale_e5f6c1c3-e784-4e90-96a7-32f0be222d3c.mp4"
+}
+```
+
+**`network_volume: false` (기본값)인 경우:**
 
 | 파라미터 | 타입 | 설명 |
 | --- | --- | --- |
 | `video` | `string` | Base64 인코딩된 비디오 파일 데이터 |
-
-**성공 응답 예시:**
 
 ```json
 {
