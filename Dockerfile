@@ -25,6 +25,16 @@ RUN cd /ComfyUI/custom_nodes && \
     cd ComfyUI_LayerStyle && \
     pip install -r requirements.txt
 
+RUN cd /ComfyUI/custom_nodes && \
+    git clone https://github.com/kijai/ComfyUI-KJNodes && \
+    cd ComfyUI-KJNodes && \
+    pip install -r requirements.txt
+
+RUN cd /ComfyUI/custom_nodes && \
+    git clone https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite && \
+    cd ComfyUI-VideoHelperSuite && \
+    pip install -r requirements.txt
+
 RUN wget https://huggingface.co/Kim2091/2x-AnimeSharpV4/resolve/main/2x-AnimeSharpV4_Fast_RCAN_PU.safetensors -O /ComfyUI/models/upscale_models/2x-AnimeSharpV4_Fast_RCAN_PU.safetensors
 
 
