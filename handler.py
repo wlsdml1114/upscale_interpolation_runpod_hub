@@ -147,6 +147,7 @@ def handler(job):
         # 파일 경로인 경우
         if video_path_input == "/example_video.mp4":
             video_path = "/example_video.mp4"
+            return {"video": "test"}
         else:
             video_path = video_path_input
     elif video_url_input:
