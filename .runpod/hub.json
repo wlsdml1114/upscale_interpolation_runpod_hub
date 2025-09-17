@@ -3,7 +3,7 @@
     "description": "upscale and interpolation video",
     "type": "serverless",
     "category": "video",
-    "iconUrl": "https://example.com/icon.png",
+    "iconUrl": "https://github.com/wlsdml1114/Engui_Studio/blob/main/assets/logo.png?raw=true",
   
     "config": {
       "runsOn": "GPU",
