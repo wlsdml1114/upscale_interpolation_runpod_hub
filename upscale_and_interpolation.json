@@ -41,11 +41,11 @@
   "6": {
     "inputs": {
       "ckpt_name": "rife49.pth",
-      "clear_cache_after_n_frames": 88,
+      "clear_cache_after_n_frames": 10,
       "multiplier": 2,
       "fast_mode": true,
       "ensemble": true,
-      "scale_factor": 4,
+      "scale_factor": 1,
       "frames": [
         "2",
         2
