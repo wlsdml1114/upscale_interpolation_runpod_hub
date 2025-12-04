@@ -10,6 +10,8 @@ import urllib.request
 import urllib.parse
 import binascii # Base64 에러 처리를 위해 import
 import time
+from PIL import Image
+import cv2
 
 # 로깅 설정
 logging.basicConfig(level=logging.INFO)
@@ -121,6 +123,81 @@ def get_video_path(ws, prompt):
     
     return None
 
+def get_image_path(ws, prompt):
+    """이미지 결과의 파일 경로를 가져옵니다."""
+    prompt_id = queue_prompt(prompt)['prompt_id']
+    while True:
+        out = ws.recv()
+        if isinstance(out, str):
+            message = json.loads(out)
+            if message['type'] == 'executing':
+                data = message['data']
+                if data['node'] is None and data['prompt_id'] == prompt_id:
+                    break
+        else:
+            continue
+
+    history = get_history(prompt_id)[prompt_id]
+    for node_id in history['outputs']:
+        node_output = history['outputs'][node_id]
+        if 'images' in node_output:
+            for image in node_output['images']:
+                # 전체 경로 구성
+                filename = image['filename']
+                subfolder = image.get('subfolder', '')
+                if subfolder:
+                    full_path = os.path.join('/ComfyUI/output', subfolder, filename)
+                else:
+                    full_path = os.path.join('/ComfyUI/output', filename)
+                # 첫 번째 이미지 파일 경로 반환
+                return full_path
+    
+    return None
+
+def get_image_dimensions(image_path):
+    """이미지의 크기를 측정합니다."""
+    try:
+        with Image.open(image_path) as img:
+            width, height = img.size
+            return width, height
+    except Exception as e:
+        logger.error(f"이미지 크기 측정 실패: {e}")
+        raise
+
+def get_video_dimensions(video_path):
+    """비디오의 크기를 측정합니다."""
+    try:
+        cap = cv2.VideoCapture(video_path)
+        if not cap.isOpened():
+            raise ValueError(f"비디오를 열 수 없습니다: {video_path}")
+        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        cap.release()
+        return width, height
+    except Exception as e:
+        logger.error(f"비디오 크기 측정 실패: {e}")
+        raise
+
+def get_video_fps(video_path):
+    """비디오의 FPS를 측정합니다."""
+    try:
+        cap = cv2.VideoCapture(video_path)
+        if not cap.isOpened():
+            raise ValueError(f"비디오를 열 수 없습니다: {video_path}")
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        cap.release()
+        return fps
+    except Exception as e:
+        logger.error(f"비디오 FPS 측정 실패: {e}")
+        raise
+
+def calculate_resolution(width, height):
+    """가장 짧은 곳의 2배를 resolution으로 계산합니다."""
+    min_dimension = min(width, height)
+    resolution = min_dimension * 2
+    logger.info(f"입력 크기: {width}x{height}, 최소 차원: {min_dimension}, 계산된 resolution: {resolution}")
+    return resolution
+
 def load_workflow(workflow_path):
     with open(workflow_path, 'r') as file:
         return json.load(file)
@@ -130,60 +207,153 @@ def handler(job):
     job_input = job.get("input", {})
     logger.info(f"Received job input: {job_input}")
     task_id = f"task_{uuid.uuid4()}"
+    os.makedirs(task_id, exist_ok=True)
 
-    # 작업 타입 확인
-    task_type = job_input.get("task_type", "upscale")
+    # 출력 형식 확인
+    output_format = job_input.get("output", "file_path")  # 기본값: file_path
     
-    # 비디오 입력 처리 (video_path, video_url, video_base64 중 하나)
+    # 입력 타입 감지 (이미지 또는 비디오)
+    image_path_input = job_input.get("image_path")
+    image_url_input = job_input.get("image_url")
+    image_base64_input = job_input.get("image_base64")
+    
     video_path_input = job_input.get("video_path")
     video_url_input = job_input.get("video_url")
     video_base64_input = job_input.get("video_base64")
     
-    if not (video_path_input or video_url_input or video_base64_input):
-        return {"error": "비디오 입력이 필요합니다. (video_path, video_url, video_base64 중 하나)"}
+    input_path = None
+    input_type = None  # "image" or "video"
+    task_type = None  # "image_upscale", "video_upscale", "video_upscale_and_interpolation"
     
-    # 비디오 파일 경로 확보
-    if video_path_input:
-        # 파일 경로인 경우
-        if video_path_input == "/example_video.mp4":
-            video_path = "/example_video.mp4"
-            return {"video": "test"}
+    # 이미지 입력 처리
+    if image_path_input or image_url_input or image_base64_input:
+        input_type = "image"
+        task_type = "image_upscale"
+        
+        if image_path_input:
+            input_path = image_path_input
+        elif image_url_input:
+            try:
+                # URL에서 확장자 추출 시도
+                parsed_url = urllib.parse.urlparse(image_url_input)
+                path = parsed_url.path
+                ext = os.path.splitext(path)[1] or '.png'
+                input_path = os.path.join(task_id, f"input_image{ext}")
+                urllib.request.urlretrieve(image_url_input, input_path)
+                logger.info(f"이미지 URL에서 다운로드 완료: {image_url_input}")
+            except Exception as e:
+                return {"error": f"이미지 URL 다운로드 실패: {e}"}
+        elif image_base64_input:
+            try:
+                # Base64에서 이미지 형식 감지 시도 (PIL 사용)
+                decoded_data = base64.b64decode(image_base64_input)
+                # BytesIO를 사용하여 PIL로 형식 감지
+                from io import BytesIO
+                img = Image.open(BytesIO(decoded_data))
+                img_format = img.format.lower() if img.format else 'png'
+                ext = f'.{img_format}'
+                input_path = os.path.join(task_id, f"input_image{ext}")
+                with open(input_path, 'wb') as f:
+                    f.write(decoded_data)
+                logger.info(f"Base64 이미지를 '{input_path}' 파일로 저장했습니다.")
+            except Exception as e:
+                # 실패 시 기본값으로 .png 사용
+                input_path = os.path.join(task_id, "input_image.png")
+                with open(input_path, 'wb') as f:
+                    f.write(base64.b64decode(image_base64_input))
+                logger.info(f"Base64 이미지를 '{input_path}' 파일로 저장했습니다 (기본 형식).")
+    
+    # 비디오 입력 처리
+    elif video_path_input or video_url_input or video_base64_input:
+        input_type = "video"
+        
+        # 작업 타입 확인 (기본값: upscale)
+        task_type_input = job_input.get("task_type", "upscale")
+        if task_type_input == "upscale_and_interpolation":
+            task_type = "video_upscale_and_interpolation"
         else:
-            video_path = video_path_input
-    elif video_url_input:
-        # URL인 경우 다운로드
-        try:
-            import urllib.request
-            video_path = os.path.join(task_id, "input_video.mp4")
-            os.makedirs(task_id, exist_ok=True)
-            urllib.request.urlretrieve(video_url_input, video_path)
-            logger.info(f"비디오 URL에서 다운로드 완료: {video_url_input}")
-        except Exception as e:
-            return {"error": f"비디오 URL 다운로드 실패: {e}"}
-    elif video_base64_input:
-        # Base64인 경우 디코딩하여 저장
-        try:
-            os.makedirs(task_id, exist_ok=True)
-            video_path = os.path.join(task_id, "input_video.mp4")
-            decoded_data = base64.b64decode(video_base64_input)
-            with open(video_path, 'wb') as f:
-                f.write(decoded_data)
-            logger.info(f"Base64 비디오를 '{video_path}' 파일로 저장했습니다.")
-        except Exception as e:
-            return {"error": f"Base64 비디오 디코딩 실패: {e}"}
+            task_type = "video_upscale"
+        
+        if video_path_input:
+            input_path = video_path_input
+        elif video_url_input:
+            try:
+                input_path = os.path.join(task_id, "input_video.mp4")
+                urllib.request.urlretrieve(video_url_input, input_path)
+                logger.info(f"비디오 URL에서 다운로드 완료: {video_url_input}")
+            except Exception as e:
+                return {"error": f"비디오 URL 다운로드 실패: {e}"}
+        elif video_base64_input:
+            try:
+                input_path = os.path.join(task_id, "input_video.mp4")
+                decoded_data = base64.b64decode(video_base64_input)
+                with open(input_path, 'wb') as f:
+                    f.write(decoded_data)
+                logger.info(f"Base64 비디오를 '{input_path}' 파일로 저장했습니다.")
+            except Exception as e:
+                return {"error": f"Base64 비디오 디코딩 실패: {e}"}
+    else:
+        return {"error": "입력이 필요합니다. (image_path/image_url/image_base64 또는 video_path/video_url/video_base64 중 하나)"}
     
-    # workflow 로드 및 설정
-    if task_type == "upscale":
-        # 업스케일링만 하는 경우
-        prompt = load_workflow("/upscale.json")
-        prompt["8"]["inputs"]["video"] = video_path
-    elif task_type == "upscale_and_interpolation":
-        # 업스케일링 + 프레임 보간
-        prompt = load_workflow("/upscale_and_interpolation.json")
-        prompt["8"]["inputs"]["video"] = video_path
+    # 입력 파일 크기 측정 및 resolution 계산
+    video_fps = None
+    try:
+        if input_type == "image":
+            width, height = get_image_dimensions(input_path)
+        else:  # video
+            width, height = get_video_dimensions(input_path)
+            # interpolation을 사용하는 경우 FPS도 측정
+            if task_type == "video_upscale_and_interpolation":
+                video_fps = get_video_fps(input_path)
+                logger.info(f"원본 비디오 FPS: {video_fps}")
+        
+        resolution = calculate_resolution(width, height)
+    except Exception as e:
+        return {"error": f"입력 파일 크기 측정 실패: {e}"}
+    
+    # 워크플로우 로드 및 설정
+    workflow_dir = os.path.join(os.path.dirname(__file__), "workflow")
+    
+    if task_type == "image_upscale":
+        workflow_path = os.path.join(workflow_dir, "image_upscale.json")
+        prompt = load_workflow(workflow_path)
+        # 노드 16: LoadImage에 이미지 경로 설정
+        prompt["16"]["inputs"]["image"] = os.path.basename(input_path)
+        # 노드 10: SeedVR2VideoUpscaler에 resolution 설정
+        prompt["10"]["inputs"]["resolution"] = resolution
+    elif task_type == "video_upscale":
+        workflow_path = os.path.join(workflow_dir, "video_upscale_api.json")
+        prompt = load_workflow(workflow_path)
+        # 노드 21: LoadVideo에 비디오 경로 설정
+        prompt["21"]["inputs"]["file"] = os.path.basename(input_path)
+        # 노드 10: SeedVR2VideoUpscaler에 resolution 설정
+        prompt["10"]["inputs"]["resolution"] = resolution
+    elif task_type == "video_upscale_and_interpolation":
+        workflow_path = os.path.join(workflow_dir, "video_upscale_interpolation_api.json")
+        prompt = load_workflow(workflow_path)
+        # 노드 21: LoadVideo에 비디오 경로 설정
+        prompt["21"]["inputs"]["file"] = os.path.basename(input_path)
+        # 노드 10: SeedVR2VideoUpscaler에 resolution 설정
+        prompt["10"]["inputs"]["resolution"] = resolution
+        # 노드 25: VHS_VideoCombine에 원본 FPS의 2배 설정
+        if video_fps is not None:
+            doubled_fps = video_fps * 2
+            prompt["25"]["inputs"]["frame_rate"] = doubled_fps
+            logger.info(f"Video Combine에 FPS 설정: {doubled_fps} (원본 FPS {video_fps}의 2배)")
+        else:
+            logger.warning("FPS를 측정할 수 없어 기본값을 사용합니다.")
     else:
         return {"error": f"지원하지 않는 작업 타입입니다: {task_type}"}
 
+    # 입력 파일을 ComfyUI의 입력 디렉토리로 복사
+    comfyui_input_dir = "/ComfyUI/input"
+    os.makedirs(comfyui_input_dir, exist_ok=True)
+    import shutil
+    input_filename = os.path.basename(input_path)
+    comfyui_input_path = os.path.join(comfyui_input_dir, input_filename)
+    shutil.copy2(input_path, comfyui_input_path)
+    logger.info(f"입력 파일을 ComfyUI 입력 디렉토리로 복사: {comfyui_input_path}")
+    
     # ComfyUI 서버 연결 및 처리
     ws_url = f"ws://{server_address}:8188/ws?clientId={client_id}"
     logger.info(f"Connecting to WebSocket: {ws_url}")
@@ -196,7 +366,6 @@ def handler(job):
     max_http_attempts = 180
     for http_attempt in range(max_http_attempts):
         try:
-            import urllib.request
             response = urllib.request.urlopen(http_url, timeout=5)
             logger.info(f"HTTP 연결 성공 (시도 {http_attempt+1})")
             break
@@ -208,9 +377,8 @@ def handler(job):
     
     ws = websocket.WebSocket()
     # 웹소켓 연결 시도 (최대 3분)
-    max_attempts = int(180/5)  # 3분 (1초에 한 번씩 시도)
+    max_attempts = int(180/5)  # 3분 (5초에 한 번씩 시도)
     for attempt in range(max_attempts):
-        import time
         try:
             ws.connect(ws_url)
             logger.info(f"웹소켓 연결 성공 (시도 {attempt+1})")
@@ -221,44 +389,38 @@ def handler(job):
                 raise Exception("웹소켓 연결 시간 초과 (3분)")
             time.sleep(5)
     
-    video_path = get_video_path(ws, prompt)
+    # 입력 타입에 따라 결과 가져오기
+    if input_type == "image":
+        result_path = get_image_path(ws, prompt)
+        result_key = "image_path"
+        result_base64_key = "image"
+    else:  # video
+        result_path = get_video_path(ws, prompt)
+        result_key = "video_path"
+        result_base64_key = "video"
+    
     ws.close()
 
-    # 비디오가 없는 경우 처리
-    if not video_path:
-        return {"error": "비디오를 생성할 수 없습니다."}
+    # 결과가 없는 경우 처리
+    if not result_path:
+        return {"error": f"{input_type}를 생성할 수 없습니다."}
     
-    # network_volume 파라미터 확인
-    use_network_volume = job_input.get("network_volume", False)
-    
-    if use_network_volume:
-        # 네트워크 볼륨 사용: 파일 경로 반환
+    # 출력 형식에 따라 처리
+    if output_format == "base64":
+        # Base64 인코딩하여 반환
         try:
-            # 결과 비디오 파일 경로 생성
-            output_filename = f"{task_type}_{task_id}.mp4"
-            output_path = f"/runpod-volume/{output_filename}"
+            with open(result_path, 'rb') as f:
+                result_data = base64.b64encode(f.read()).decode('utf-8')
             
-            # 원본 파일을 결과 경로로 복사
-            import shutil
-            shutil.copy2(video_path, output_path)
-            
-            logger.info(f"결과 비디오를 '{output_path}'에 저장했습니다.")
-            return {"video_path": output_path}
+            logger.info(f"{input_type}를 Base64로 인코딩하여 반환했습니다.")
+            return {result_base64_key: result_data}
             
         except Exception as e:
-            logger.error(f"비디오 저장 실패: {e}")
-            return {"error": f"비디오 저장 실패: {e}"}
+            logger.error(f"{input_type} Base64 인코딩 실패: {e}")
+            return {"error": f"{input_type} 인코딩 실패: {e}"}
     else:
-        # 네트워크 볼륨 미사용: Base64 인코딩하여 반환
-        try:
-            with open(video_path, 'rb') as f:
-                video_data = base64.b64encode(f.read()).decode('utf-8')
-            
-            logger.info("비디오를 Base64로 인코딩하여 반환했습니다.")
-            return {"video": video_data}
-            
-        except Exception as e:
-            logger.error(f"비디오 Base64 인코딩 실패: {e}")
-            return {"error": f"비디오 인코딩 실패: {e}"}
+        # 기본값: 파일 경로 반환
+        logger.info(f"결과 {input_type} 경로: {result_path}")
+        return {result_key: result_path}
 
 runpod.serverless.start({"handler": handler})
