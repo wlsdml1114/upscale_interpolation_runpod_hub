@@ -420,7 +420,37 @@ def handler(job):
             return {"error": f"{input_type} 인코딩 실패: {e}"}
     else:
         # 기본값: 파일 경로 반환
-        logger.info(f"결과 {input_type} 경로: {result_path}")
-        return {result_key: result_path}
+        # 결과 파일을 runpod-volume으로 복사
+        logger.info(f"원본 결과 {input_type} 경로: {result_path}")
+        try:
+            import shutil
+            # runpod-volume 디렉토리 생성
+            runpod_volume_dir = "/runpod-volume"
+            os.makedirs(runpod_volume_dir, exist_ok=True)
+            
+            # 파일명 생성 (task_id와 원본 확장자 사용)
+            original_filename = os.path.basename(result_path)
+            file_ext = os.path.splitext(original_filename)[1]
+            output_filename = f"upscale_{task_id}{file_ext}"
+            output_path = os.path.join(runpod_volume_dir, output_filename)
+            
+            # 파일 복사
+            logger.info(f"결과 파일을 runpod-volume으로 복사 중: {result_path} -> {output_path}")
+            shutil.copy2(result_path, output_path)
+            
+            # 복사 확인
+            if os.path.exists(output_path):
+                file_size = os.path.getsize(output_path)
+                logger.info(f"✅ 결과 {input_type}를 '{output_path}'에 성공적으로 복사했습니다 (크기: {file_size} bytes)")
+                return {result_key: output_path}
+            else:
+                logger.error(f"파일 복사 실패: {output_path}가 존재하지 않습니다.")
+                return {"error": f"결과 파일 복사 실패"}
+                
+        except Exception as e:
+            logger.error(f"runpod-volume으로 파일 복사 실패: {e}")
+            # 복사 실패 시 원본 경로 반환 (fallback)
+            logger.warning(f"원본 경로를 반환합니다: {result_path}")
+            return {result_key: result_path}
 
 runpod.serverless.start({"handler": handler})
