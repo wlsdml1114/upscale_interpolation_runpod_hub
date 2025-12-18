@@ -12,10 +12,43 @@ import binascii # Base64 에러 처리를 위해 import
 import time
 from PIL import Image
 import cv2
+import cloudinary
+import cloudinary.uploader
+import requests
 
+cloudinary.config(
+    cloud_name=os.environ.get("CLOUDINARY_CLOUD_NAME"),
+    api_key=os.environ.get("CLOUDINARY_API_KEY"),
+    api_secret=os.environ.get("CLOUDINARY_API_SECRET"),
+    secure=True
+)
 # 로깅 설정
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+def upload_to_cloudinary(file_path: str) -> str:
+    cloud_name = os.environ.get("CLOUDINARY_CLOUD_NAME")
+    upload_preset = os.environ.get("CLOUDINARY_UPLOAD_PRESET")
+
+    if not cloud_name or not upload_preset:
+        raise RuntimeError("Missing CLOUDINARY_CLOUD_NAME or CLOUDINARY_UPLOAD_PRESET")
+
+    url = f"https://api.cloudinary.com/v1_1/{cloud_name}/video/upload"
+
+    with open(file_path, "rb") as f:
+        response = requests.post(
+            url,
+            data={
+                "upload_preset": upload_preset,
+                "resource_type": "video",
+            },
+            files={"file": f},
+            timeout=600,
+        )
+
+    response.raise_for_status()
+    data = response.json()
+    return data["secure_url"]
 
 # CUDA 검사 및 설정
 def check_cuda_availability():
@@ -425,8 +458,8 @@ def handler(job):
         try:
             import shutil
             # runpod-volume 디렉토리 생성
-            runpod_volume_dir = "/runpod-volume"
-            os.makedirs(runpod_volume_dir, exist_ok=True)
+            _volume_dir = "/-volume"
+            os.makedirs(_volume_dir, exist_ok=True)
             
             # 파일명 생성 (task_id와 원본 확장자 사용)
             original_filename = os.path.basename(result_path)
@@ -440,9 +473,17 @@ def handler(job):
             
             # 복사 확인
             if os.path.exists(output_path):
-                file_size = os.path.getsize(output_path)
-                logger.info(f"✅ 결과 {input_type}를 '{output_path}'에 성공적으로 복사했습니다 (크기: {file_size} bytes)")
-                return {result_key: output_path}
+    file_size = os.path.getsize(output_path)
+    logger.info(f"✅ 결과 파일 생성 완료: {output_path} ({file_size} bytes)")
+
+    logger.info("☁ Uploading result to Cloudinary...")
+    cloudinary_url = upload_to_cloudinary(output_path)
+
+    logger.info(f"🌍 Cloudinary URL: {cloudinary_url}")
+
+    return {
+        result_key: cloudinary_url
+    }
             else:
                 logger.error(f"파일 복사 실패: {output_path}가 존재하지 않습니다.")
                 return {"error": f"결과 파일 복사 실패"}
