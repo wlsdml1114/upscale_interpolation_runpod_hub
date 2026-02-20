@@ -47,6 +47,8 @@ RUN mkdir -p /ComfyUI/models/SEEDVR2
 RUN wget https://huggingface.co/AInVFX/SeedVR2_comfyUI/resolve/main/seedvr2_ema_7b_sharp_fp8_e4m3fn_mixed_block35_fp16.safetensors -O /ComfyUI/models/SEEDVR2/seedvr2_ema_7b_sharp_fp8_e4m3fn_mixed_block35_fp16.safetensors
 # RUN wget https://huggingface.co/numz/SeedVR2_comfyUI/resolve/main/seedvr2_ema_3b_fp8_e4m3fn.safetensors -O /ComfyUI/models/SEEDVR2/seedvr2_ema_3b_fp8_e4m3fn.safetensors
 RUN wget https://huggingface.co/numz/SeedVR2_comfyUI/resolve/main/ema_vae_fp16.safetensors -O /ComfyUI/models/SEEDVR2/ema_vae_fp16.safetensors
+RUN wget https://huggingface.co/hfmaster/models-moved/resolve/cab6dcee2fbb05e190dbb8f536fbdaa489031a14/rife/rife49.pth -O /ComfyUI/custom_nodes/ComfyUI-Frame-Interpolation/ckpts/rife/rife49.pth
+
 
 WORKDIR /
 
