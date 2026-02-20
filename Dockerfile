@@ -16,8 +16,9 @@ RUN cd /ComfyUI/custom_nodes && \
     pip install -r requirements.txt
     
 RUN cd /ComfyUI/custom_nodes && \
-    git clone https://github.com/Fannovel16/ComfyUI-Frame-Interpolation.git && \
-    cd ComfyUI-Frame-Interpolation && \
+    git clone https://github.com/Fannovel16/ComfyUI-Frame-Interpolation.git
+
+RUN cd /ComfyUI/custom_nodes/ComfyUI-Frame-Interpolation && \
     python install.py
 
 RUN cd /ComfyUI/custom_nodes && \
